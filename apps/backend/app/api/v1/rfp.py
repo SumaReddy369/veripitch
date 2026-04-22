@@ -1,0 +1,129 @@
+"""
+Phase 3 — RFP Processing & RAG Engine
+
+POST /api/v1/rfp/process
+  - Accepts an .xlsx file
+  - Parses questions from Column A
+  - For each question: local embedding → ChromaDB search → Groq LLM answer
+  - Processes questions concurrently (bounded by rfp_concurrency_limit)
+  - Returns structured JSON array for the frontend review dashboard
+"""
+
+from __future__ import annotations
+
+import asyncio
+import uuid
+
+import structlog
+from chromadb import Collection
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from openai import AsyncOpenAI
+from sentence_transformers import SentenceTransformer
+
+from app.config import Settings, get_settings
+from app.core.embeddings import get_embedding
+from app.core.llm import generate_rfp_answer
+from app.core.rag import assemble_context, search_chunks
+from app.db.client import get_collection
+from app.models.schemas import ProcessRFPResponse, RFPResult, RFPStatus
+from app.utils.excel_parser import extract_questions
+
+log = structlog.get_logger(__name__)
+router = APIRouter(prefix="/rfp", tags=["RFP"])
+
+
+def get_embedding_model(request: Request) -> SentenceTransformer:
+    return request.app.state.embedding_model
+
+
+def get_groq_client(request: Request) -> AsyncOpenAI:
+    return request.app.state.groq_client
+
+
+@router.post(
+    "/process",
+    response_model=ProcessRFPResponse,
+    summary="Process an RFP XLSX and generate AI answers via RAG",
+)
+async def process_rfp(
+    request: Request,
+    file: UploadFile = File(...),
+    settings: Settings = Depends(get_settings),
+    collection: Collection = Depends(get_collection),
+    embed_model: SentenceTransformer = Depends(get_embedding_model),
+    groq_client: AsyncOpenAI = Depends(get_groq_client),
+) -> ProcessRFPResponse:
+
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only .xlsx files are accepted.",
+        )
+
+    file_bytes = await file.read()
+
+    if len(file_bytes) > settings.max_xlsx_size:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File exceeds the {settings.max_xlsx_size // (1024*1024)} MB limit.",
+        )
+
+    filename = file.filename
+    job_id = str(uuid.uuid4())
+    log.info("rfp.process.start", filename=filename, job_id=job_id)
+
+    questions = extract_questions(file_bytes)
+
+    if not questions:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No questions found in Column A of the workbook.",
+        )
+
+    if collection.count() == 0:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail="Knowledge base is empty. Please upload at least one PDF document first.",
+        )
+
+    # Semaphore keeps concurrent Groq API calls within rate limits
+    semaphore = asyncio.Semaphore(settings.rfp_concurrency_limit)
+
+    async def process_one(row_index: int, question: str) -> RFPResult:
+        async with semaphore:
+            try:
+                embedding = await get_embedding(question, embed_model)
+                chunks = await search_chunks(embedding, collection, settings)
+                context = assemble_context(chunks)
+                llm_resp = await generate_rfp_answer(question, context, groq_client, settings)
+                return RFPResult(
+                    row_index=row_index,
+                    question=question,
+                    answer=llm_resp.answer,
+                    confidence_score=llm_resp.confidence_score,
+                    source_citation=llm_resp.source_citation,
+                    status=RFPStatus.PENDING,
+                )
+            except Exception as exc:
+                log.error("rfp.question_failed", row=row_index, error=str(exc))
+                return RFPResult(
+                    row_index=row_index,
+                    question=question,
+                    answer="[Processing error — please review manually]",
+                    confidence_score=0,
+                    source_citation="N/A",
+                    status=RFPStatus.PENDING,
+                )
+
+    tasks = [process_one(idx, q) for idx, q in questions]
+    results: list[RFPResult] = list(await asyncio.gather(*tasks))
+    results.sort(key=lambda r: r.row_index)
+
+    log.info("rfp.process.complete", job_id=job_id, count=len(results))
+
+    return ProcessRFPResponse(
+        job_id=job_id,
+        filename=filename,
+        total_questions=len(results),
+        results=results,
+    )

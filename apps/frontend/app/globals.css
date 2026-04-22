@@ -1,0 +1,72 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+
+  * {
+    @apply border-slate-200;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white
+           shadow-sm transition-all hover:bg-brand-700 active:scale-95
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2
+           text-sm font-medium text-slate-700 shadow-sm transition-all hover:bg-slate-50
+           active:scale-95 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center gap-2 rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium
+           text-red-600 transition-all hover:bg-red-100 active:scale-95;
+  }
+
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+
+  .upload-zone {
+    @apply flex flex-col items-center justify-center rounded-xl border-2 border-dashed
+           border-slate-300 bg-slate-50 p-8 text-center transition-colors
+           hover:border-brand-500 hover:bg-brand-50 cursor-pointer;
+  }
+
+  .upload-zone-active {
+    @apply border-brand-500 bg-brand-50;
+  }
+
+  .table-cell {
+    @apply px-4 py-3 text-sm text-slate-700;
+  }
+
+  .table-header {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { @apply bg-transparent; }
+::-webkit-scrollbar-thumb { @apply rounded-full bg-slate-300 hover:bg-slate-400; }
+
+/* Auto-resize textarea */
+textarea {
+  field-sizing: content;
+  min-height: 80px;
+}
