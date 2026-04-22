@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     app_name: str = "VeriPitch API"
     app_version: str = "0.1.0"
     app_env: str = "development"
-    debug: bool = True
+    debug: bool = False
 
     # ── CORS ──────────────────────────────────────────────────
-    # In .env use JSON array syntax: ALLOWED_ORIGINS=["http://localhost:3000"]
+    # In .env use JSON array: ALLOWED_ORIGINS=["http://localhost:3000"]
     allowed_origins: list[str] = ["http://localhost:3000"]
 
     # ── Groq (OpenAI-compatible LLM) ──────────────────────────
@@ -28,12 +28,13 @@ class Settings(BaseSettings):
     # ── Local embeddings (sentence-transformers, no API key) ──
     embedding_model: str = "all-MiniLM-L6-v2"
 
-    # ── ChromaDB (local persistent vector store) ──────────────
-    chromadb_path: str = "./chroma_db"
-    chromadb_collection: str = "document_chunks"
+    # ── Supabase (persistent pgvector store) ──────────────────
+    supabase_url: str
+    supabase_service_role_key: str
 
     # ── RAG tuning ────────────────────────────────────────────
     rag_match_count: int = 3
+    rag_match_threshold: float = 0.35
 
     # ── File limits (bytes) ───────────────────────────────────
     max_pdf_size: int = 20 * 1024 * 1024   # 20 MB

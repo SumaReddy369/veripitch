@@ -4,7 +4,8 @@ Phase 3 — RFP Processing & RAG Engine
 POST /api/v1/rfp/process
   - Accepts an .xlsx file
   - Parses questions from Column A
-  - For each question: local embedding → ChromaDB search → Groq LLM answer
+  - For each question: sentence-transformers embedding → Supabase pgvector search
+    → Groq LLM answer
   - Processes questions concurrently (bounded by rfp_concurrency_limit)
   - Returns structured JSON array for the frontend review dashboard
 """
@@ -13,18 +14,19 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import datetime, timezone
 
 import structlog
-from chromadb import Collection
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from openai import AsyncOpenAI
 from sentence_transformers import SentenceTransformer
+from supabase import AsyncClient
 
 from app.config import Settings, get_settings
 from app.core.embeddings import get_embedding
 from app.core.llm import generate_rfp_answer
 from app.core.rag import assemble_context, search_chunks
-from app.db.client import get_collection
+from app.db.client import get_supabase
 from app.models.schemas import ProcessRFPResponse, RFPResult, RFPStatus
 from app.utils.excel_parser import extract_questions
 
@@ -32,7 +34,7 @@ log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/rfp", tags=["RFP"])
 
 
-def get_embedding_model(request: Request) -> SentenceTransformer:
+def get_embed_model(request: Request) -> SentenceTransformer:
     return request.app.state.embedding_model
 
 
@@ -49,8 +51,8 @@ async def process_rfp(
     request: Request,
     file: UploadFile = File(...),
     settings: Settings = Depends(get_settings),
-    collection: Collection = Depends(get_collection),
-    embed_model: SentenceTransformer = Depends(get_embedding_model),
+    supabase: AsyncClient = Depends(get_supabase),
+    embed_model: SentenceTransformer = Depends(get_embed_model),
     groq_client: AsyncOpenAI = Depends(get_groq_client),
 ) -> ProcessRFPResponse:
 
@@ -61,7 +63,6 @@ async def process_rfp(
         )
 
     file_bytes = await file.read()
-
     if len(file_bytes) > settings.max_xlsx_size:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -73,29 +74,31 @@ async def process_rfp(
     log.info("rfp.process.start", filename=filename, job_id=job_id)
 
     questions = extract_questions(file_bytes)
-
     if not questions:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No questions found in Column A of the workbook.",
         )
 
-    if collection.count() == 0:
-        raise HTTPException(
-            status_code=status.HTTP_412_PRECONDITION_FAILED,
-            detail="Knowledge base is empty. Please upload at least one PDF document first.",
-        )
+    # Log job to Supabase audit table
+    await supabase.table("rfp_jobs").insert({
+        "id": job_id,
+        "original_name": filename,
+        "question_count": len(questions),
+        "status": "processing",
+    }).execute()
 
-    # Semaphore keeps concurrent Groq API calls within rate limits
     semaphore = asyncio.Semaphore(settings.rfp_concurrency_limit)
 
     async def process_one(row_index: int, question: str) -> RFPResult:
         async with semaphore:
             try:
                 embedding = await get_embedding(question, embed_model)
-                chunks = await search_chunks(embedding, collection, settings)
+                chunks = await search_chunks(embedding, supabase, settings)
                 context = assemble_context(chunks)
-                llm_resp = await generate_rfp_answer(question, context, groq_client, settings)
+                llm_resp = await generate_rfp_answer(
+                    question, context, groq_client, settings
+                )
                 return RFPResult(
                     row_index=row_index,
                     question=question,
@@ -118,6 +121,11 @@ async def process_rfp(
     tasks = [process_one(idx, q) for idx, q in questions]
     results: list[RFPResult] = list(await asyncio.gather(*tasks))
     results.sort(key=lambda r: r.row_index)
+
+    await supabase.table("rfp_jobs").update({
+        "status": "complete",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", job_id).execute()
 
     log.info("rfp.process.complete", job_id=job_id, count=len(results))
 

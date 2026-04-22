@@ -1,13 +1,12 @@
 """
-VeriPitch FastAPI application factory — local stack edition.
+VeriPitch FastAPI application — Supabase + Groq + sentence-transformers stack.
 
-Startup:
-  1. Validate env vars (Pydantic Settings raises if GROQ_API_KEY is missing)
-  2. Configure structlog
-  3. Load sentence-transformers embedding model (downloads ~80 MB on first run)
-  4. Open ChromaDB persistent client + collection
-  5. Build Groq (OpenAI-compatible) async client
-  6. Store all shared resources on app.state
+Startup sequence:
+  1. Validate env vars (Pydantic Settings raises on missing required keys)
+  2. Configure structlog structured logging
+  3. Load sentence-transformers embedding model (~80 MB, cached after first run)
+  4. Open Supabase async client (persistent vector store)
+  5. Build Groq async client (LLM)
 """
 
 from __future__ import annotations
@@ -25,7 +24,7 @@ from app.api.v1.router import v1_router
 from app.config import Settings, get_settings
 from app.core.embeddings import load_embedding_model
 from app.core.llm import build_groq_client
-from app.db.client import init_chromadb
+from app.db.client import init_supabase
 
 
 def _configure_logging(settings: Settings) -> None:
@@ -55,18 +54,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     log.info("startup", app=settings.app_name, env=settings.app_env)
 
-    # 1. Load embedding model (blocks briefly on first run while downloading)
+    # 1. Local embedding model
     app.state.embedding_model = load_embedding_model(settings.embedding_model)
 
-    # 2. ChromaDB — local persistent vector store
-    chroma_client, chroma_collection = init_chromadb(settings)
-    app.state.chroma_client = chroma_client
-    app.state.chroma_collection = chroma_collection
+    # 2. Supabase async client (persistent vector store)
+    app.state.supabase = await init_supabase(settings)
 
-    # 3. Groq client (AsyncOpenAI pointed at Groq's base URL)
+    # 3. Groq LLM client
     app.state.groq_client = build_groq_client(settings)
 
-    log.info("startup.complete", model=settings.llm_model)
+    log.info("startup.complete", llm=settings.llm_model, db=settings.supabase_url)
 
     yield
 
@@ -80,8 +77,8 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description="Autonomous RFP Completion Agent — RAG-powered answers from your knowledge base.",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if not settings.is_production else None,
+        redoc_url=None,
         lifespan=lifespan,
     )
 
@@ -97,7 +94,7 @@ def create_app() -> FastAPI:
 
     app.include_router(v1_router)
 
-    @app.get("/health", tags=["Meta"], include_in_schema=False)
+    @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, str]:
         return {"status": "ok", "version": settings.app_version}
 
