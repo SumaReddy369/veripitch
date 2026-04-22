@@ -54,16 +54,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     log.info("startup", app=settings.app_name, env=settings.app_env)
 
-    # 1. Local embedding model
-    app.state.embedding_model = load_embedding_model(settings.embedding_model)
+    # Initialise each dependency independently so a single failure doesn't
+    # prevent the server from starting — /health will still respond and logs
+    # will show exactly which component failed.
+    try:
+        app.state.embedding_model = load_embedding_model(settings.embedding_model)
+        log.info("startup.embeddings_ready")
+    except Exception as exc:
+        log.error("startup.embeddings_failed", error=str(exc))
+        app.state.embedding_model = None
 
-    # 2. Supabase async client (persistent vector store)
-    app.state.supabase = await init_supabase(settings)
+    try:
+        app.state.supabase = await init_supabase(settings)
+        log.info("startup.supabase_ready")
+    except Exception as exc:
+        log.error("startup.supabase_failed", error=str(exc))
+        app.state.supabase = None
 
-    # 3. Groq LLM client
-    app.state.groq_client = build_groq_client(settings)
+    try:
+        app.state.groq_client = build_groq_client(settings)
+        log.info("startup.groq_ready")
+    except Exception as exc:
+        log.error("startup.groq_failed", error=str(exc))
+        app.state.groq_client = None
 
-    log.info("startup.complete", llm=settings.llm_model, db=settings.supabase_url)
+    log.info("startup.complete", llm=settings.llm_model)
 
     yield
 
@@ -95,8 +110,14 @@ def create_app() -> FastAPI:
     app.include_router(v1_router)
 
     @app.get("/health", include_in_schema=False)
-    async def health() -> dict[str, str]:
-        return {"status": "ok", "version": settings.app_version}
+    async def health() -> dict:
+        return {
+            "status": "ok",
+            "version": settings.app_version,
+            "embeddings": app.state.embedding_model is not None,
+            "supabase":   app.state.supabase is not None,
+            "groq":       app.state.groq_client is not None,
+        }
 
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception) -> JSONResponse:
