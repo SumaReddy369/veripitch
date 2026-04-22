@@ -4,7 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 
-export function WaitlistForm() {
+interface Props {
+  dark?: boolean;
+}
+
+export function WaitlistForm({ dark = false }: Props) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -39,42 +43,55 @@ export function WaitlistForm() {
     }
   };
 
+  const inputBase =
+    "w-full rounded-lg px-4 py-3 text-sm outline-none transition-all";
+
+  const inputClass = dark
+    ? `${inputBase} bg-white/10 border border-white/20 text-white placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/30`
+    : `${inputBase} bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-100`;
+
   return (
     <form onSubmit={handleSubmit} className="flex w-full max-w-md flex-col gap-3">
       <input
         type="text"
         value={fullName}
         onChange={(e) => setFullName(e.target.value)}
-        placeholder="Your full name"
+        placeholder="Full name"
         required
-        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+        className={inputClass}
       />
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex gap-2">
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@company.com"
+          placeholder="Work email"
           required
-          className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          className={`${inputClass} flex-1`}
         />
         <button
           type="submit"
           disabled={status === "loading"}
-          className="btn-primary shrink-0 rounded-xl px-6 py-3 text-sm"
+          className={`shrink-0 inline-flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition-all disabled:opacity-50 ${
+            dark
+              ? "bg-brand-500 text-white hover:bg-brand-400"
+              : "bg-slate-900 text-white hover:bg-slate-700"
+          }`}
         >
           {status === "loading" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <>
-              Join Waitlist
+              Request Access
               <ArrowRight className="h-4 w-4" />
             </>
           )}
         </button>
       </div>
       {errorMsg && (
-        <p className="text-center text-xs text-red-500">{errorMsg}</p>
+        <p className={`text-xs ${dark ? "text-red-300" : "text-red-500"}`}>
+          {errorMsg}
+        </p>
       )}
     </form>
   );
