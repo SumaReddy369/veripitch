@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 
 interface Props {
-  dark?: boolean;
+  dark?: boolean; // true = rendered inside the blue hero section
 }
 
 export function WaitlistForm({ dark = false }: Props) {
@@ -43,12 +43,12 @@ export function WaitlistForm({ dark = false }: Props) {
     }
   };
 
-  const inputBase =
-    "w-full rounded-lg px-4 py-3 text-sm outline-none transition-all";
+  const inputBase = "w-full rounded-lg px-4 py-3 text-sm outline-none transition-all";
 
-  const inputClass = dark
-    ? `${inputBase} bg-white/10 border border-white/20 text-white placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/30`
-    : `${inputBase} bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-100`;
+  const inputDark  = `${inputBase} bg-blue-500/30 border border-blue-400/40 text-white placeholder:text-blue-200 focus:border-white focus:ring-2 focus:ring-white/20`;
+  const inputLight = `${inputBase} bg-white border border-blue-200 text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100`;
+
+  const inputClass = dark ? inputDark : inputLight;
 
   return (
     <form onSubmit={handleSubmit} className="flex w-full max-w-md flex-col gap-3">
@@ -74,8 +74,8 @@ export function WaitlistForm({ dark = false }: Props) {
           disabled={status === "loading"}
           className={`shrink-0 inline-flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition-all disabled:opacity-50 ${
             dark
-              ? "bg-brand-500 text-white hover:bg-brand-400"
-              : "bg-slate-900 text-white hover:bg-slate-700"
+              ? "bg-white text-blue-700 hover:bg-blue-50"
+              : "bg-blue-600 text-white hover:bg-blue-700"
           }`}
         >
           {status === "loading" ? (
@@ -89,7 +89,7 @@ export function WaitlistForm({ dark = false }: Props) {
         </button>
       </div>
       {errorMsg && (
-        <p className={`text-xs ${dark ? "text-red-300" : "text-red-500"}`}>
+        <p className={`text-xs ${dark ? "text-blue-200" : "text-red-500"}`}>
           {errorMsg}
         </p>
       )}
