@@ -48,41 +48,54 @@ def _configure_logging(settings: Settings) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """
+    Lightweight startup: configure logging and mark all deps as unloaded.
+    Heavy initialisation (ONNX model, Supabase, Groq) happens lazily on
+    first use so the /health endpoint can respond immediately and the
+    platform healthcheck passes.
+    """
     settings: Settings = app.state.settings
     _configure_logging(settings)
     log = structlog.get_logger(__name__)
 
     log.info("startup", app=settings.app_name, env=settings.app_env)
 
-    # Initialise each dependency independently so a single failure doesn't
-    # prevent the server from starting — /health will still respond and logs
-    # will show exactly which component failed.
-    try:
-        app.state.embedding_model = load_embedding_model(settings.embedding_model)
-        log.info("startup.embeddings_ready")
-    except Exception as exc:
-        log.error("startup.embeddings_failed", error=str(exc))
-        app.state.embedding_model = None
+    app.state.embedding_model = None
+    app.state.supabase = None
+    app.state.groq_client = None
 
-    try:
-        app.state.supabase = await init_supabase(settings)
-        log.info("startup.supabase_ready")
-    except Exception as exc:
-        log.error("startup.supabase_failed", error=str(exc))
-        app.state.supabase = None
-
-    try:
-        app.state.groq_client = build_groq_client(settings)
-        log.info("startup.groq_ready")
-    except Exception as exc:
-        log.error("startup.groq_failed", error=str(exc))
-        app.state.groq_client = None
-
-    log.info("startup.complete", llm=settings.llm_model)
+    log.info("startup.complete — dependencies will load lazily on first use")
 
     yield
 
     log.info("shutdown")
+
+
+async def get_embedding_model(app: FastAPI):
+    """Lazy-load the fastembed ONNX model. Cached on app.state after first call."""
+    if app.state.embedding_model is None:
+        log = structlog.get_logger(__name__)
+        log.info("lazy_load.embeddings")
+        app.state.embedding_model = load_embedding_model(app.state.settings.embedding_model)
+    return app.state.embedding_model
+
+
+async def get_supabase(app: FastAPI):
+    """Lazy-load the Supabase client. Cached on app.state after first call."""
+    if app.state.supabase is None:
+        log = structlog.get_logger(__name__)
+        log.info("lazy_load.supabase")
+        app.state.supabase = await init_supabase(app.state.settings)
+    return app.state.supabase
+
+
+async def get_groq(app: FastAPI):
+    """Lazy-load the Groq client. Cached on app.state after first call."""
+    if app.state.groq_client is None:
+        log = structlog.get_logger(__name__)
+        log.info("lazy_load.groq")
+        app.state.groq_client = build_groq_client(app.state.settings)
+    return app.state.groq_client
 
 
 def create_app() -> FastAPI:
@@ -111,13 +124,19 @@ def create_app() -> FastAPI:
 
     @app.get("/health", include_in_schema=False)
     async def health() -> dict:
+        """Fast healthcheck — always returns 200 so the platform sees the
+        container as ready. Component status is reported for debugging."""
         return {
             "status": "ok",
             "version": settings.app_version,
-            "embeddings": app.state.embedding_model is not None,
-            "supabase":   app.state.supabase is not None,
-            "groq":       app.state.groq_client is not None,
+            "embeddings_loaded": app.state.embedding_model is not None,
+            "supabase_loaded":   app.state.supabase is not None,
+            "groq_loaded":       app.state.groq_client is not None,
         }
+
+    @app.get("/", include_in_schema=False)
+    async def root() -> dict:
+        return {"service": settings.app_name, "status": "ok", "docs": "/docs"}
 
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception) -> JSONResponse:
