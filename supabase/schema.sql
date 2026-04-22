@@ -54,10 +54,12 @@ create index if not exists rfp_jobs_created_idx
 
 -- ============================================================
 -- 4. Waitlist table
---    Stores early-access email sign-ups from the landing page.
+--    Stores early-access sign-ups from the landing page.
+--    Captures full name + email; deduped by email.
 -- ============================================================
 create table if not exists public.waitlist (
   id         uuid          primary key default gen_random_uuid(),
+  full_name  text          not null,
   email      text          not null unique,
   created_at timestamptz   not null default now()
 );
@@ -71,8 +73,10 @@ alter table public.document_chunks enable row level security;
 alter table public.rfp_jobs        enable row level security;
 alter table public.waitlist        enable row level security;
 
--- Waitlist: anyone can insert their own email (anon key allowed)
-create policy if not exists "Anyone can join waitlist"
+-- Waitlist: anyone can insert (anon key allowed)
+-- NOTE: CREATE POLICY IF NOT EXISTS requires PG 17+; use drop+create for PG 15 (Supabase default)
+drop policy if exists "Anyone can join waitlist" on public.waitlist;
+create policy "Anyone can join waitlist"
   on public.waitlist for insert
   with check (true);
 

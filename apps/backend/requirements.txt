@@ -4,7 +4,6 @@ uvicorn[standard]>=0.30.0
 python-multipart>=0.0.9
 
 # ── Configuration ─────────────────────────────────────────────
-pydantic>=2.8.0
 pydantic[email]>=2.8.0
 pydantic-settings>=2.4.0
 python-dotenv>=1.0.1
@@ -12,8 +11,9 @@ python-dotenv>=1.0.1
 # ── Database — Supabase (pgvector) ───────────────────────────
 supabase>=2.7.0
 
-# ── Local embeddings (sentence-transformers, no API key) ─────
-sentence-transformers>=3.0.0
+# ── Local embeddings (fastembed ONNX — no PyTorch, keeps image < 2 GB) ──────
+fastembed>=0.3.6
+numpy>=1.26.0
 
 # ── LLM — Groq via OpenAI-compatible client ──────────────────
 openai>=1.50.0

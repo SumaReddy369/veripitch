@@ -1,16 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, CheckCircle, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Loader2 } from "lucide-react";
 
 export function WaitlistForm() {
+  const router = useRouter();
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    if (!fullName.trim() || !email) return;
     setStatus("loading");
+    setErrorMsg("");
 
     try {
       const res = await fetch(
@@ -18,55 +23,58 @@ export function WaitlistForm() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ full_name: fullName.trim(), email }),
         },
       );
-      setStatus(res.ok ? "done" : "error");
+
+      if (res.ok) {
+        router.push(`/waitlist/thanks?name=${encodeURIComponent(fullName.trim())}`);
+      } else {
+        setErrorMsg("Something went wrong — please try again.");
+        setStatus("idle");
+      }
     } catch {
-      setStatus("error");
+      setErrorMsg("Could not connect. Please try again shortly.");
+      setStatus("idle");
     }
   };
 
-  if (status === "done") {
-    return (
-      <div className="flex items-center justify-center gap-3 rounded-xl border border-green-200 bg-green-50 px-6 py-4">
-        <CheckCircle className="h-5 w-5 text-green-600" />
-        <div>
-          <p className="font-semibold text-green-800">You're on the list!</p>
-          <p className="text-sm text-green-600">We'll reach out to {email} when we launch.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="flex w-full max-w-md flex-col gap-3 sm:flex-row">
+    <form onSubmit={handleSubmit} className="flex w-full max-w-md flex-col gap-3">
       <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@company.com"
+        type="text"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        placeholder="Your full name"
         required
-        className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
       />
-      <button
-        type="submit"
-        disabled={status === "loading"}
-        className="btn-primary rounded-xl px-6 py-3 text-sm"
-      >
-        {status === "loading" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <>
-            Join Waitlist
-            <ArrowRight className="h-4 w-4" />
-          </>
-        )}
-      </button>
-      {status === "error" && (
-        <p className="w-full text-center text-xs text-red-500">
-          Something went wrong — try again or email us directly.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@company.com"
+          required
+          className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+        />
+        <button
+          type="submit"
+          disabled={status === "loading"}
+          className="btn-primary shrink-0 rounded-xl px-6 py-3 text-sm"
+        >
+          {status === "loading" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <>
+              Join Waitlist
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
+        </button>
+      </div>
+      {errorMsg && (
+        <p className="text-center text-xs text-red-500">{errorMsg}</p>
       )}
     </form>
   );

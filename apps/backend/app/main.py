@@ -1,10 +1,10 @@
 """
-VeriPitch FastAPI application — Supabase + Groq + sentence-transformers stack.
+VeriPitch FastAPI application — Supabase + Groq + fastembed stack.
 
 Startup sequence:
   1. Validate env vars (Pydantic Settings raises on missing required keys)
   2. Configure structlog structured logging
-  3. Load sentence-transformers embedding model (~80 MB, cached after first run)
+  3. Load fastembed ONNX embedding model (baked into Docker image)
   4. Open Supabase async client (persistent vector store)
   5. Build Groq async client (LLM)
 """

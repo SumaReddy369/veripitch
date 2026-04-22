@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing — excluded to reduce build context size
+.pytest_cache/
+htmlcov/
+.coverage
+*.xml
+tests/
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Local model cache (baked during build, not needed from host)
+.cache/
+
+# Environment files (secrets — injected by Railway at runtime)
+.env
+.env.*
+
+# Docs
+*.md
