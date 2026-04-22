@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = ["http://localhost:3000"]
 
     # ── Groq (OpenAI-compatible LLM) ──────────────────────────
-    groq_api_key: str
+    # Empty-string defaults allow the server to start even if env vars are
+    # missing; individual API calls will fail with a clear error instead of
+    # crashing the whole process at import time.
+    groq_api_key: str = ""
     groq_base_url: str = "https://api.groq.com/openai/v1"
     llm_model: str = "llama-3.3-70b-versatile"
 
@@ -29,8 +32,8 @@ class Settings(BaseSettings):
     embedding_model: str = "all-MiniLM-L6-v2"
 
     # ── Supabase (persistent pgvector store) ──────────────────
-    supabase_url: str
-    supabase_service_role_key: str
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
 
     # ── RAG tuning ────────────────────────────────────────────
     rag_match_count: int = 3
