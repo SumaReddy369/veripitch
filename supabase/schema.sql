@@ -1,10 +1,3 @@
--- ============================================================
--- VeriPitch — Supabase Schema
--- Paste this entire file into the Supabase SQL Editor and run it.
--- It is fully idempotent — safe to run multiple times.
--- ============================================================
-
-
 -- 1. Enable pgvector extension
 create extension if not exists vector
   with schema extensions;
@@ -55,18 +48,37 @@ create table if not exists public.rfp_jobs (
   completed_at    timestamptz
 );
 
+create index if not exists rfp_jobs_created_idx
+  on public.rfp_jobs (created_at desc);
+
 
 -- ============================================================
--- 4. Row-Level Security
+-- 4. Waitlist table
+--    Stores early-access email sign-ups from the landing page.
+-- ============================================================
+create table if not exists public.waitlist (
+  id         uuid          primary key default gen_random_uuid(),
+  email      text          not null unique,
+  created_at timestamptz   not null default now()
+);
+
+
+-- ============================================================
+-- 5. Row-Level Security
 --    Service-role key (used by FastAPI) bypasses RLS automatically.
---    Add user-scoped policies here when you add auth.
 -- ============================================================
 alter table public.document_chunks enable row level security;
-alter table public.rfp_jobs       enable row level security;
+alter table public.rfp_jobs        enable row level security;
+alter table public.waitlist        enable row level security;
+
+-- Waitlist: anyone can insert their own email (anon key allowed)
+create policy if not exists "Anyone can join waitlist"
+  on public.waitlist for insert
+  with check (true);
 
 
 -- ============================================================
--- 5. match_chunks — the RAG similarity-search function
+-- 6. match_chunks — the RAG similarity-search function
 --    Called by the backend instead of raw SQL so query logic
 --    lives in one place and is easy to tune without a deploy.
 -- ============================================================
@@ -98,7 +110,7 @@ $$;
 
 
 -- ============================================================
--- 6. delete_document — remove all chunks for a filename
+-- 7. delete_document — remove all chunks for a filename
 --    Called by DELETE /api/v1/knowledge-base/{filename}
 -- ============================================================
 create or replace function public.delete_document(p_filename text)

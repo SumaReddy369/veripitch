@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, Database, FileText, Zap } from "lucide-react";
+import { Database, FileText, Zap } from "lucide-react";
 import { KnowledgeBasePanel } from "@/components/KnowledgeBasePanel";
 import { ReviewTable } from "@/components/ReviewTable";
 import { useRFPProcessor } from "@/hooks/useRFPProcessor";
@@ -45,23 +45,9 @@ export default function DashboardPage() {
       : null;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      {/* ── Header ─────────────────────────────────────────── */}
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600">
-            <Bot className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">VeriPitch</h1>
-            <p className="text-xs text-slate-500">Autonomous RFP Completion Agent</p>
-          </div>
-          <span className="ml-2 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">
-            MVP v0.1
-          </span>
-        </div>
-
-        {/* Stats strip */}
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* ── Toolbar (stats + export) ───────────────────────── */}
+      <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-2.5">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-1.5 text-sm text-slate-500">
             <Database className="h-4 w-4" />
@@ -96,21 +82,21 @@ export default function DashboardPage() {
               </span>
             </div>
           )}
-
-          {rfp.results.length > 0 && (
-            <button
-              onClick={rfp.exportApproved}
-              disabled={approvedCount === 0 || rfp.isExporting}
-              className="btn-primary"
-            >
-              <FileText className="h-4 w-4" />
-              {rfp.isExporting
-                ? "Exporting…"
-                : `Export Approved (${approvedCount}/${rfp.results.length})`}
-            </button>
-          )}
         </div>
-      </header>
+
+        {rfp.results.length > 0 && (
+          <button
+            onClick={rfp.exportApproved}
+            disabled={approvedCount === 0 || rfp.isExporting}
+            className="btn-primary"
+          >
+            <FileText className="h-4 w-4" />
+            {rfp.isExporting
+              ? "Exporting…"
+              : `Export Approved (${approvedCount}/${rfp.results.length})`}
+          </button>
+        )}
+      </div>
 
       {/* ── Body ───────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
