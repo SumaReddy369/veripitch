@@ -24,6 +24,7 @@ async def init_supabase(settings: Settings) -> AsyncClient:
     return client
 
 
-def get_supabase(request: Request) -> AsyncClient:
-    """FastAPI dependency — pulls the shared client from app.state."""
-    return request.app.state.supabase
+async def get_supabase(request: Request) -> AsyncClient:
+    """FastAPI dependency — lazy-loads the Supabase client on first use."""
+    from app.main import get_supabase as _get_supabase
+    return await _get_supabase(request.app)

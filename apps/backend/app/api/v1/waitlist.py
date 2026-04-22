@@ -2,11 +2,12 @@
 POST /api/v1/waitlist — store name + email in the waitlist table.
 """
 
-from fastapi import APIRouter
-from pydantic import BaseModel, EmailStr
 import structlog
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, EmailStr
+from supabase import AsyncClient
 
-from app.db.client import get_supabase_client
+from app.db.client import get_supabase
 
 router = APIRouter(tags=["waitlist"])
 log = structlog.get_logger(__name__)
@@ -18,11 +19,13 @@ class WaitlistRequest(BaseModel):
 
 
 @router.post("/waitlist", status_code=201)
-async def join_waitlist(body: WaitlistRequest):
+async def join_waitlist(
+    body: WaitlistRequest,
+    supabase: AsyncClient = Depends(get_supabase),
+):
     """Add name + email to the waitlist. Silently deduplicates by email."""
-    client = get_supabase_client()
     try:
-        client.table("waitlist").upsert(
+        await supabase.table("waitlist").upsert(
             {"full_name": body.full_name, "email": body.email},
             on_conflict="email",
         ).execute()

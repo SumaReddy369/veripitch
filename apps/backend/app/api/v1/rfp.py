@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastembed import TextEmbedding
 from openai import AsyncOpenAI
-from sentence_transformers import SentenceTransformer
 from supabase import AsyncClient
 
 from app.config import Settings, get_settings
@@ -34,12 +34,14 @@ log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/rfp", tags=["RFP"])
 
 
-def get_embed_model(request: Request) -> SentenceTransformer:
-    return request.app.state.embedding_model
+async def get_embed_model(request: Request) -> TextEmbedding:
+    from app.main import get_embedding_model
+    return await get_embedding_model(request.app)
 
 
-def get_groq_client(request: Request) -> AsyncOpenAI:
-    return request.app.state.groq_client
+async def get_groq_client(request: Request) -> AsyncOpenAI:
+    from app.main import get_groq
+    return await get_groq(request.app)
 
 
 @router.post(
@@ -52,7 +54,7 @@ async def process_rfp(
     file: UploadFile = File(...),
     settings: Settings = Depends(get_settings),
     supabase: AsyncClient = Depends(get_supabase),
-    embed_model: SentenceTransformer = Depends(get_embed_model),
+    embed_model: TextEmbedding = Depends(get_embed_model),
     groq_client: AsyncOpenAI = Depends(get_groq_client),
 ) -> ProcessRFPResponse:
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from supabase import AsyncClient
 
 from app.config import Settings, get_settings
@@ -28,8 +28,9 @@ router = APIRouter(prefix="/knowledge-base", tags=["Knowledge Base"])
 _INSERT_BATCH_SIZE = 100
 
 
-def get_embed_model(request: Request) -> SentenceTransformer:
-    return request.app.state.embedding_model
+async def get_embed_model(request: Request) -> TextEmbedding:
+    from app.main import get_embedding_model
+    return await get_embedding_model(request.app)
 
 
 @router.post(
@@ -44,7 +45,7 @@ async def upload_document(
     replace: bool = Query(False, description="Delete existing chunks for this file first"),
     settings: Settings = Depends(get_settings),
     supabase: AsyncClient = Depends(get_supabase),
-    embed_model: SentenceTransformer = Depends(get_embed_model),
+    embed_model: TextEmbedding = Depends(get_embed_model),
 ) -> UploadResponse:
 
     if not file.filename or not file.filename.lower().endswith(".pdf"):
